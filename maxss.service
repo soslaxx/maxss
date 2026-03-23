@@ -1,0 +1,21 @@
+[Unit]
+Description=MAXSS Core Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/var/www/maxss-core
+ExecStart=/var/www/maxss-core/maxss serve --base-dir /var/www/maxss-core
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+NoNewPrivileges=true
+ReadWritePaths=/var/www/maxss-core
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
