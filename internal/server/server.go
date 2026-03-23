@@ -11,6 +11,8 @@ import (
 	mrand "math/rand"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -290,6 +292,7 @@ func (m *Manager) performHandshake(conn *websocket.Conn, cfg config.Config) (str
 			"xchacha20-poly1305",
 			"hmac-sha3-256",
 			"blake2b-mask",
+			"udp-relay",
 		},
 	}
 	if err := writeJSON(conn, resp); err != nil {
@@ -319,6 +322,18 @@ func (m *Manager) relaySession(conn *websocket.Conn, session *protocol.SessionCi
 		_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgError, []byte(err.Error())))
 		return 0, 0
 	}
+	mode := "tcp"
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(target)), "udp:") {
+		mode = "udp"
+		target = strings.TrimSpace(target[4:])
+	}
+	if target == "" {
+		_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgError, []byte("empty target")))
+		return 0, 0
+	}
+	if mode == "udp" {
+		return m.relayUDPSession(conn, session, writer, cfg, target)
+	}
 
 	dialTimeout := time.Duration(cfg.Limits.DialTimeoutSec) * time.Second
 	if dialTimeout <= 0 {
@@ -347,6 +362,93 @@ func (m *Manager) relaySession(conn *websocket.Conn, session *protocol.SessionCi
 				}
 			}
 			if err != nil {
+				_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgClose, nil))
+				break
+			}
+		}
+		done <- struct{}{}
+	}()
+
+	for {
+		_, frame, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		plain, err := session.Decrypt(frame)
+		if err != nil {
+			break
+		}
+		t, p, err := protocol.DecodeMessage(plain)
+		if err != nil {
+			break
+		}
+		switch t {
+		case protocol.MsgData:
+			if len(p) == 0 {
+				continue
+			}
+			n, err := remote.Write(p)
+			if n > 0 {
+				bo.Add(int64(n))
+			}
+			if err != nil {
+				goto exit
+			}
+		case protocol.MsgPing:
+		case protocol.MsgClose:
+			_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgClose, nil))
+			goto exit
+		default:
+			_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgError, []byte("unknown message")))
+			goto exit
+		}
+	}
+
+exit:
+	select {
+	case <-done:
+	default:
+	}
+	return bo.Load(), bi.Load()
+}
+
+func (m *Manager) relayUDPSession(conn *websocket.Conn, session *protocol.SessionCipher, writer *wsWriter, cfg config.Config, target string) (bytesIn, bytesOut int64) {
+	dialTimeout := time.Duration(cfg.Limits.DialTimeoutSec) * time.Second
+	if dialTimeout <= 0 {
+		dialTimeout = 10 * time.Second
+	}
+	remote, err := net.DialTimeout("udp", target, dialTimeout)
+	if err != nil {
+		_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgError, []byte("dial failed")))
+		return 0, 0
+	}
+	defer remote.Close()
+	_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgConnectOK, []byte("ok")))
+
+	done := make(chan struct{}, 2)
+	var bo atomic.Int64
+	var bi atomic.Int64
+
+	readTimeout := time.Duration(cfg.Limits.IdleTimeoutSec) * time.Second
+	if readTimeout <= 0 {
+		readTimeout = 180 * time.Second
+	}
+
+	go func() {
+		buf := make([]byte, 64*1024)
+		for {
+			_ = remote.SetReadDeadline(time.Now().Add(readTimeout))
+			n, err := remote.Read(buf)
+			if n > 0 {
+				bi.Add(int64(n))
+				if err := writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgData, buf[:n])); err != nil {
+					break
+				}
+			}
+			if err != nil {
+				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+					continue
+				}
 				_ = writer.writeEncrypted(session, protocol.EncodeMessage(protocol.MsgClose, nil))
 				break
 			}

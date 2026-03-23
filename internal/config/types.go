@@ -113,7 +113,8 @@ func SecureDefaults(port int, sni, name string) Config {
 			MaxConnections:      20000,
 		},
 		Meta: map[string]string{
-			"profile": "maximum-stealth-speed",
+			"profile":   "maximum-stealth-speed",
+			"udp_relay": "enabled",
 		},
 	}
 }

@@ -42,6 +42,7 @@
     "max_connections": 20000
   },
   "meta": {
-    "profile": "maximum-stealth-speed"
+    "profile": "maximum-stealth-speed",
+    "udp_relay": "enabled"
   }
 }
