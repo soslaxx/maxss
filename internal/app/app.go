@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"maxss/internal/client"
 	"maxss/internal/cli"
+	"maxss/internal/client"
 	"maxss/internal/config"
 	"maxss/internal/db"
 	"maxss/internal/server"
@@ -23,15 +23,21 @@ const (
 )
 
 func Run(args []string) error {
+	noColor := false
+	for len(args) > 0 && args[0] == "--no-color" {
+		noColor = true
+		args = args[1:]
+	}
+
 	if len(args) == 0 {
-		return runPanel(defaultOpts())
+		return runPanel(defaultOpts(), noColor)
 	}
 
 	switch args[0] {
 	case "serve":
 		return runServe(args[1:])
 	case "panel", "menu":
-		return runPanelWithFlags(args[1:])
+		return runPanelWithFlags(args[1:], noColor)
 	case "init":
 		return runInit(args[1:])
 	case "quick-config":
@@ -95,7 +101,7 @@ func runServe(args []string) error {
 	return mgr.Run(ctx)
 }
 
-func runPanel(args runtimeOpts) error {
+func runPanel(args runtimeOpts, noColor bool) error {
 	if err := ensurePaths(args); err != nil {
 		return err
 	}
@@ -103,17 +109,20 @@ func runPanel(args runtimeOpts) error {
 		ConfigDir:   args.configDir,
 		DBPath:      args.dbPath,
 		ServiceName: "maxss.service",
+		NoColor:     noColor,
 	})
 }
 
-func runPanelWithFlags(args []string) error {
+func runPanelWithFlags(args []string, inheritedNoColor bool) error {
 	opts := defaultOpts()
+	noColor := inheritedNoColor
 	fs := flag.NewFlagSet("panel", flag.ContinueOnError)
 	parseBaseFlags(fs, &opts)
+	fs.BoolVar(&noColor, "no-color", noColor, "Disable ANSI colors in terminal panel")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	return runPanel(opts)
+	return runPanel(opts, noColor)
 }
 
 func runInit(args []string) error {
@@ -202,10 +211,15 @@ func ensurePaths(opts runtimeOpts) error {
 func printHelp() {
 	fmt.Println("maxss - Maximum Stealth & Speed")
 	fmt.Println()
+	fmt.Println("Global flags:")
+	fmt.Println("  --no-color            Disable ANSI colors in terminal panel")
+	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  maxss                 # Open control panel")
+	fmt.Println("  maxss --no-color      # Open panel without colors")
 	fmt.Println("  maxss serve           # Run server")
 	fmt.Println("  maxss panel           # Open control panel")
+	fmt.Println("  maxss panel --no-color")
 	fmt.Println("  maxss init            # Initialize DB/configs")
 	fmt.Println("  maxss quick-config    # Create strongest config from flags")
 	fmt.Println("  maxss connect         # Start local SOCKS5 client using maxss transport")

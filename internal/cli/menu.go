@@ -23,6 +23,96 @@ type MenuOptions struct {
 	ConfigDir   string
 	DBPath      string
 	ServiceName string
+	NoColor     bool
+}
+
+const (
+	ansiReset   = "\x1b[0m"
+	ansiTitle   = "\x1b[1;38;5;51m"
+	ansiBorder  = "\x1b[1;38;5;45m"
+	ansiMenu    = "\x1b[38;5;159m"
+	ansiPrompt  = "\x1b[1;38;5;220m"
+	ansiSuccess = "\x1b[1;32m"
+	ansiError   = "\x1b[1;31m"
+	ansiMuted   = "\x1b[38;5;246m"
+	ansiByline  = "\x1b[1;38;5;214m"
+)
+
+type menuTheme struct {
+	color bool
+}
+
+var activeTheme = menuTheme{color: true}
+
+func newMenuTheme(noColor bool) menuTheme {
+	return menuTheme{color: !noColor}
+}
+
+func (t menuTheme) paint(style, text string) string {
+	if !t.color {
+		return text
+	}
+	return style + text + ansiReset
+}
+
+func (t menuTheme) title(text string) string {
+	return t.paint(ansiTitle, text)
+}
+
+func (t menuTheme) border(text string) string {
+	return t.paint(ansiBorder, text)
+}
+
+func (t menuTheme) menu(text string) string {
+	return t.paint(ansiMenu, text)
+}
+
+func (t menuTheme) prompt(text string) string {
+	return t.paint(ansiPrompt, text)
+}
+
+func (t menuTheme) success(text string) string {
+	return t.paint(ansiSuccess, text)
+}
+
+func (t menuTheme) error(text string) string {
+	return t.paint(ansiError, text)
+}
+
+func (t menuTheme) muted(text string) string {
+	return t.paint(ansiMuted, text)
+}
+
+func (t menuTheme) byline(text string) string {
+	return t.paint(ansiByline, text)
+}
+
+func (t menuTheme) showSplash() {
+	if t.color {
+		fmt.Print("\x1b[2J\x1b[H")
+	}
+	fmt.Println(t.border("+------------------------------------------------------------+"))
+	fmt.Println(t.border("|                 MAXSS TERMINAL SHELL                       |"))
+	fmt.Println(t.border("+------------------------------------------------------------+"))
+	fmt.Println(t.title(" __  __    _    __  ______ ____  "))
+	fmt.Println(t.title("|  \\/  |  / \\   \\ \\/ / ___/ ___| "))
+	fmt.Println(t.title("| |\\/| | / _ \\   \\  /\\___ \\___ \\ "))
+	fmt.Println(t.title("| |  | |/ ___ \\  /  \\ ___) |__) |"))
+	fmt.Println(t.title("|_|  |_/_/   \\_\\/_/\\_\\____/____/ "))
+	fmt.Println()
+
+	fmt.Println(t.byline(" ____   ___  ____  _        _    __  ____  __"))
+	fmt.Println(t.byline("/ ___| / _ \\/ ___|| |      / \\   \\ \\/ /\\ \\/ /"))
+	fmt.Println(t.byline("\\___ \\| | | \\___ \\| |     / _ \\   \\  /  \\  / "))
+	fmt.Println(t.byline(" ___) | |_| |___) | |___ / ___ \\  /  \\  /  \\ "))
+	fmt.Println(t.byline("|____/ \\___/|____/|_____/_/   \\_\\/_/\\_\\/_/\\_\\"))
+	fmt.Println(t.byline("                 Maximum Stealth & Speed"))
+	fmt.Println(t.border("+------------------------------------------------------------+"))
+	fmt.Println()
+}
+
+func printError(err error) {
+	fmt.Println(activeTheme.error(fmt.Sprintf("Error: %v", err)))
 }
 
 func RunMenu(opts MenuOptions) error {
@@ -36,6 +126,9 @@ func RunMenu(opts MenuOptions) error {
 		return err
 	}
 
+	activeTheme = newMenuTheme(opts.NoColor)
+	activeTheme.showSplash()
+
 	r := bufio.NewReader(os.Stdin)
 	for {
 		printMenu()
@@ -43,66 +136,66 @@ func RunMenu(opts MenuOptions) error {
 		switch choice {
 		case "1":
 			if err := createUserFlow(r, store); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "2":
 			if err := deleteUserFlow(r, store); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "3":
 			if err := listUsersFlow(store); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "4":
 			if err := createConfigFlow(r, opts.ConfigDir); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "5":
 			if err := subscriptionFlow(r, store, opts.ConfigDir); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "6":
 			if err := manageConfigsFlow(r, opts.ConfigDir); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "7":
 			if err := restartService(opts.ServiceName); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "8":
 			if err := statsFlow(store, opts.ConfigDir); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "9":
 			if err := quickConfigFlow(r, opts.ConfigDir); err != nil {
-				fmt.Printf("Error: %v\n", err)
+				printError(err)
 			}
 		case "0", "q", "Q", "exit":
 			return nil
 		default:
-			fmt.Println("Invalid option")
+			fmt.Println(activeTheme.error("Invalid option"))
 		}
 		fmt.Println()
 	}
 }
 
 func printMenu() {
-	fmt.Println("=== MAXSS Control Panel v1.0 ===")
+	fmt.Println(activeTheme.title("=== MAXSS Control Panel v1.0 ==="))
 	fmt.Println()
-	fmt.Println("1) Create new user")
-	fmt.Println("2) Delete user")
-	fmt.Println("3) List all users")
-	fmt.Println("4) Create secure config")
-	fmt.Println("5) Generate subscription link")
-	fmt.Println("6) Manage configs")
-	fmt.Println("7) Restart service")
-	fmt.Println("8) Show statistics")
-	fmt.Println("9) Quick secure config")
-	fmt.Println("0) Exit")
+	fmt.Println(activeTheme.menu("1) Create new user"))
+	fmt.Println(activeTheme.menu("2) Delete user"))
+	fmt.Println(activeTheme.menu("3) List all users"))
+	fmt.Println(activeTheme.menu("4) Create secure config"))
+	fmt.Println(activeTheme.menu("5) Generate subscription link"))
+	fmt.Println(activeTheme.menu("6) Manage configs"))
+	fmt.Println(activeTheme.menu("7) Restart service"))
+	fmt.Println(activeTheme.menu("8) Show statistics"))
+	fmt.Println(activeTheme.menu("9) Quick secure config"))
+	fmt.Println(activeTheme.menu("0) Exit"))
 }
 
 func createUserFlow(r *bufio.Reader, store *db.Store) error {
-	fmt.Println("Create new user")
+	fmt.Println(activeTheme.title("Create new user"))
 	username := prompt(r, "Username")
 	password := prompt(r, "Password")
 	allowed := prompt(r, "Allowed config NAMES (comma separated)")
@@ -130,12 +223,12 @@ func createUserFlow(r *bufio.Reader, store *db.Store) error {
 	if err := store.CreateUser(username, hash, allowed, trafficLimit, expiresAt); err != nil {
 		return err
 	}
-	fmt.Println("User created")
+	fmt.Println(activeTheme.success("User created"))
 	return nil
 }
 
 func deleteUserFlow(r *bufio.Reader, store *db.Store) error {
-	fmt.Println("Delete user")
+	fmt.Println(activeTheme.title("Delete user"))
 	username := prompt(r, "Username")
 	if err := store.DeleteUser(username); err != nil {
 		if err == sql.ErrNoRows {
@@ -143,7 +236,7 @@ func deleteUserFlow(r *bufio.Reader, store *db.Store) error {
 		}
 		return err
 	}
-	fmt.Println("User deleted")
+	fmt.Println(activeTheme.success("User deleted"))
 	return nil
 }
 
@@ -153,9 +246,10 @@ func listUsersFlow(store *db.Store) error {
 		return err
 	}
 	if len(users) == 0 {
-		fmt.Println("No users found")
+		fmt.Println(activeTheme.muted("No users found"))
 		return nil
 	}
+	fmt.Println(activeTheme.title("Users"))
 	fmt.Printf("%-4s %-16s %-28s %-10s %-24s %-10s\n", "ID", "Username", "Allowed Configs", "LimitGB", "ExpiresAt", "UsedMB")
 	for _, u := range users {
 		exp := u.ExpiresAt
@@ -168,7 +262,7 @@ func listUsersFlow(store *db.Store) error {
 }
 
 func createConfigFlow(r *bufio.Reader, configDir string) error {
-	fmt.Println("Create secure config")
+	fmt.Println(activeTheme.title("Create secure config"))
 	name := promptDefault(r, "NAME", "Secure Config")
 	portText := promptDefault(r, "Port", "443")
 	sni := promptDefault(r, "SNI", "www.cloudflare.com")
@@ -181,12 +275,12 @@ func createConfigFlow(r *bufio.Reader, configDir string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Created %s (%s)\n", cfg.Name, path)
+	fmt.Println(activeTheme.success(fmt.Sprintf("Created %s (%s)", cfg.Name, path)))
 	return nil
 }
 
 func quickConfigFlow(r *bufio.Reader, configDir string) error {
-	fmt.Println("Quick secure config")
+	fmt.Println(activeTheme.title("Quick secure config"))
 	portText := promptDefault(r, "Port", "443")
 	sni := promptDefault(r, "SNI", "www.cloudflare.com")
 	port, err := strconv.Atoi(portText)
@@ -197,12 +291,12 @@ func quickConfigFlow(r *bufio.Reader, configDir string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Created strongest config: %s (%s)\n", cfg.Name, path)
+	fmt.Println(activeTheme.success(fmt.Sprintf("Created strongest config: %s (%s)", cfg.Name, path)))
 	return nil
 }
 
 func subscriptionFlow(r *bufio.Reader, store *db.Store, configDir string) error {
-	fmt.Println("Generate subscription link")
+	fmt.Println(activeTheme.title("Generate subscription link"))
 	username := prompt(r, "Username")
 	defaultAddr := detectPublicServerAddress()
 	addr := promptDefault(r, "Server address override (optional)", defaultAddr)
@@ -222,7 +316,7 @@ func subscriptionFlow(r *bufio.Reader, store *db.Store, configDir string) error 
 	if err := store.UpdateSubscription(user.Username, link); err != nil {
 		return err
 	}
-	fmt.Println("Subscription link:")
+	fmt.Println(activeTheme.success("Subscription link:"))
 	fmt.Println(link)
 	return nil
 }
@@ -276,17 +370,17 @@ func manageConfigsFlow(r *bufio.Reader, configDir string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Manage configs")
+		fmt.Println(activeTheme.title("Manage configs"))
 		if len(cfgs) == 0 {
-			fmt.Println("No configs found")
+			fmt.Println(activeTheme.muted("No configs found"))
 		} else {
 			for i, fc := range cfgs {
 				fmt.Printf("%d) %s (%s:%d) -> %s\n", i+1, fc.Config.Name, fc.Config.Listen, fc.Config.Port, fc.Path)
 			}
 		}
-		fmt.Println("d) Delete config")
-		fmt.Println("v) View config JSON")
-		fmt.Println("b) Back")
+		fmt.Println(activeTheme.menu("d) Delete config"))
+		fmt.Println(activeTheme.menu("v) View config JSON"))
+		fmt.Println(activeTheme.menu("b) Back"))
 		choice := prompt(r, "Choice")
 		switch strings.ToLower(choice) {
 		case "b":
@@ -295,29 +389,29 @@ func manageConfigsFlow(r *bufio.Reader, configDir string) error {
 			idxText := prompt(r, "Config number to delete")
 			idx, err := strconv.Atoi(idxText)
 			if err != nil || idx < 1 || idx > len(cfgs) {
-				fmt.Println("Invalid number")
+				fmt.Println(activeTheme.error("Invalid number"))
 				continue
 			}
 			if err := config.DeleteConfig(cfgs[idx-1].Path); err != nil {
-				fmt.Printf("Delete failed: %v\n", err)
+				fmt.Println(activeTheme.error(fmt.Sprintf("Delete failed: %v", err)))
 				continue
 			}
-			fmt.Println("Config deleted")
+			fmt.Println(activeTheme.success("Config deleted"))
 		case "v":
 			idxText := prompt(r, "Config number to view")
 			idx, err := strconv.Atoi(idxText)
 			if err != nil || idx < 1 || idx > len(cfgs) {
-				fmt.Println("Invalid number")
+				fmt.Println(activeTheme.error("Invalid number"))
 				continue
 			}
 			b, err := os.ReadFile(cfgs[idx-1].Path)
 			if err != nil {
-				fmt.Printf("Read failed: %v\n", err)
+				fmt.Println(activeTheme.error(fmt.Sprintf("Read failed: %v", err)))
 				continue
 			}
 			fmt.Println(string(b))
 		default:
-			fmt.Println("Invalid option")
+			fmt.Println(activeTheme.error("Invalid option"))
 		}
 		fmt.Println()
 	}
@@ -332,7 +426,7 @@ func restartService(service string) error {
 	if err != nil {
 		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
 	}
-	fmt.Println("Service restarted")
+	fmt.Println(activeTheme.success("Service restarted"))
 	return nil
 }
 
@@ -345,7 +439,7 @@ func statsFlow(store *db.Store, configDir string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Statistics")
+	fmt.Println(activeTheme.title("Statistics"))
 	fmt.Printf("Users: %d\n", st.Users)
 	fmt.Printf("Configs: %d\n", st.Configs)
 	fmt.Printf("Total Connections: %d\n", st.TotalConnections)
@@ -357,7 +451,7 @@ func statsFlow(store *db.Store, configDir string) error {
 }
 
 func prompt(r *bufio.Reader, title string) string {
-	fmt.Printf("%s: ", title)
+	fmt.Printf("%s: ", activeTheme.prompt(title))
 	v, _ := r.ReadString('\n')
 	return strings.TrimSpace(v)
 }
@@ -366,7 +460,7 @@ func promptDefault(r *bufio.Reader, title, def string) string {
 	if def == "" {
 		return prompt(r, title)
 	}
-	fmt.Printf("%s [%s]: ", title, def)
+	fmt.Printf("%s [%s]: ", activeTheme.prompt(title), def)
 	v, _ := r.ReadString('\n')
 	v = strings.TrimSpace(v)
 	if v == "" {

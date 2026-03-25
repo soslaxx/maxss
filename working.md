@@ -9,7 +9,15 @@
 - Session keying: ephemeral `X25519` + `HKDF-SHA512` for per-session key derivation.
 - Frame protection: layered crypto stack (TLS + inner AEAD/integrity/masking) to protect confidentiality and tamper resistance.
 - Obfuscation: padding, jitter, and variable frame sizes.
-- Data relay: after handshake, a CONNECT-like stage starts and TCP traffic is relayed inside encrypted frames.
+- Data relay: after handshake, a CONNECT-like stage starts and traffic is relayed inside encrypted frames for both TCP and UDP.
+
+## UDP Workflow
+
+- Client side supports SOCKS5 `UDP ASSOCIATE` and opens `udp:` targets through the same maxss tunnel.
+- For each UDP destination, the client creates/reuses a dedicated encrypted tunnel session flow.
+- Server switches relay mode to UDP when target starts with `udp:` and dials `net.DialTimeout("udp", target, ...)`.
+- UDP payloads are packed into `MsgData` frames and protected by the same session cipher stack (AES-GCM + XChaCha20-Poly1305 + HMAC + masking) over TLS 1.3 + WebSocket.
+- Current limitation: SOCKS5 UDP fragmentation (`FRAG != 0x00`) is rejected.
 
 ## What Was Reused and From Where
 
